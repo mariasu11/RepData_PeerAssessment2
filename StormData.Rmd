@@ -1,0 +1,196 @@
+
+# Exploration of Severe Weather Events in the United States between 1950 and 2011 and their effect on Population Health and the Economy 
+
+## Reproducible Research : Peer Assessment 2
+
+### Synopsis
+
+In this report we aim to explore the U.S. National Oceanic and Atmospheric Administration's (NOAA) Storm Database and answer two questions about severe weather events. Specifically, which types of events are most harmful with respect to population health and which types of events have the greatest economic consequences. The time period in which we are exploring data is 1950 to 2011. The results of the analysis showed that tornados and excessive heat are most harmful with respect to population health, while flood and hurricane have the greatest economic consequences.
+
+### Data Processing
+
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the link below:
+
+[StormData](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+
+First, we must read the data into R (Assumes the above file in your working directory) 
+
+
+```{r read data}
+stormdata <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+cache=TRUE
+```
+
+After reading in the data, we check the dimensions and the first few rows.
+
+```{r check dim and head}
+dim(stormdata)
+
+head(stormdata)
+```
+
+The dataset has 902,297 rows and 37 columns.
+
+To get more information about the columns we use the str function on the data
+
+```{r strfunction}
+str(stormdata)
+```
+
+Our analysis focuses on the effects of severe weather events on population health and the economy so we will extract only the columns that are necessary.  These columns are EVTYPE,INJURIES, FATALITIES, PROPDMG, CROPDMG, PROPDMGEXP, and CROPDMGEXP.
+
+EVTYPE lists the severe weather event type.
+
+INJURIES and FATALITIES are self explanatory and are numeric columns.  
+
+PROPDMG and CROPDMG are numeric values as well but to get their actual value we must multiply them by the value in the corresponding PROPDMGEXP and CROPDMGEXP fields.
+
+First lets subset the data with the columns we are interested in:
+
+```{r datasubset}
+stormdatasubset<- stormdata[,c("EVTYPE", "INJURIES", "FATALITIES", "PROPDMG", "CROPDMG", "PROPDMGEXP", "CROPDMGEXP") ]
+```
+
+Our data subset now has 902297 rows and 7 columns.
+
+```{r subsetdim}
+dim(stormdatasubset)
+
+head(stormdatasubset)
+```
+
+Since effects on population health include both FATALITIES and INJURIES, we will create a new column in the dataset called FATINJ which will sum both columns and display a total.
+
+```{r createFATINJ}
+stormdatasubset$FATINJ <- stormdatasubset$INJURIES + stormdatasubset$FATALITIES
+```
+
+Our dataset now has 8 columns:
+
+```{r seeFATINJ}
+head(stormdatasubset)
+```
+
+Taking a closer look at the CROPDMGEXP and PROPDMGEXP columns we see that entries are not consistent and have many different values, so this requires cleaning.
+
+```{r EXP columns}
+summary(stormdatasubset$PROPDMGEXP)
+
+summary(stormdatasubset$CROPDMGEXP)
+```
+
+We are only interested in the values H, K, M, B (which stands for hundered, thousand, million, and billion) We can assume the lowercase values are typos and convert them to upper case. We can disregard all other values.  They are also a very small portion of the data.
+
+```{r toupper}
+stormdatasubset$PROPDMGEXP <- toupper(stormdatasubset$PROPDMGEXP)
+stormdatasubset$CROPDMGEXP <- toupper(stormdatasubset$CROPDMGEXP)
+```
+
+Now we make the logical substitutions so the columns can be multiplied(we assume that a blank space means the value is 1):
+
+```{r subsprop}
+stormdatasubset$PROPDMGEXP[stormdatasubset$PROPDMGEXP==""]<-"1"
+stormdatasubset$PROPDMGEXP[stormdatasubset$PROPDMGEXP=="H"]<-"100"
+stormdatasubset$PROPDMGEXP[stormdatasubset$PROPDMGEXP=="K"]<-"1000"
+stormdatasubset$PROPDMGEXP[stormdatasubset$PROPDMGEXP=="M"]<-"1000000"
+stormdatasubset$PROPDMGEXP[stormdatasubset$PROPDMGEXP=="B"]<-"1000000000"
+```
+
+Convert to numeric so column can be muliplied
+
+```{r propnumeric}
+stormdatasubset$PROPDMGEXP<-as.numeric(stormdatasubset$PROPDMGEXP)
+```
+
+Repeat steps for CROPDMGEXP column
+
+```{r subscrop}
+stormdatasubset$CROPDMGEXP[stormdatasubset$CROPDMGEXP==""]<-"1"
+stormdatasubset$CROPDMGEXP[stormdatasubset$CROPDMGEXP=="H"]<-"100"
+stormdatasubset$CROPDMGEXP[stormdatasubset$CROPDMGEXP=="K"]<-"1000"
+stormdatasubset$CROPDMGEXP[stormdatasubset$CROPDMGEXP=="M"]<-"1000000"
+stormdatasubset$CROPDMGEXP[stormdatasubset$CROPDMGEXP=="B"]<-"1000000000"
+```
+
+Convert to numeric so column can be muliplied
+
+```{r cropnumeric}
+stormdatasubset$CROPDMGEXP<-as.numeric(stormdatasubset$CROPDMGEXP)
+```
+
+Muliply columns and create two new columns
+
+```{r cropandproptotal}
+stormdatasubset$PROPTOTAL <- stormdatasubset$PROPDMG * stormdatasubset$PROPDMGEXP
+
+stormdatasubset$CROPTOTAL <- stormdatasubset$CROPDMG * stormdatasubset$CROPDMGEXP
+```
+
+Now we can add the PROPTOTAL and CROPTOTAL columns together:
+
+```{r econtotal}
+stormdatasubset$ECONTOTAL <- stormdatasubset$CROPTOTAL * stormdatasubset$PROPTOTAL
+```
+
+Our data is now clean and organized, we can start looking at results.
+
+##Results
+
+Lets first look at the effect of severe weather events on population health. We will plot the total fatalities and injuries (FATINJ) by event type (EVTYPE).
+
+```{r aggregatecasualties}
+aggregatefatinj <- aggregate(stormdatasubset$FATINJ, list(stormdatasubset$EVTYPE), FUN = "sum", na.rm = TRUE)
+```
+
+Order the results in decreasing order and display the top ten events
+
+```{r ordercasualtiestopten}
+Tallypop <- head(aggregatefatinj[order(aggregatefatinj$x, decreasing = T), ], 10)
+Tallypop
+```
+
+Now we can plot the fatalites and injuries by event type.
+
+```{r populationplot}
+barplot(Tallypop[1:10,2], names.arg=Tallypop[1:10,1], col = 47, main= "Top ten weather events affecting population health" ,ylab = "Number of fatalities and injuries", xlab = "Event Type", las=2, ylim = c(0,100000))
+```
+
+As we can see from the barplot, the event type which overwhelmingly effects population health the most is Tornado.  A distant second is excessive heat.
+
+Now lets look at the effect of severe weather events on the economy. First we will aggregate the ECONTOTAL column by event type.
+
+```{r aggregateecon}
+aggregateecontotal <- aggregate(stormdatasubset$ECONTOTAL, list(stormdatasubset$EVTYPE), FUN = "sum", na.rm = TRUE)
+```
+
+Order the results in decreasing order and display the top ten events.
+
+```{r orderecontopten}
+Econpop <- head(aggregateecontotal[order(aggregateecontotal$x, decreasing = T), ], 10)
+
+Econpop
+```
+
+Now we can plot the economic consequences by event type.
+
+```{r econplot}
+barplot(Econpop[1:10,2], names.arg=Econpop[1:10,1], col = 47, main= "Top ten weather events affecting the economy" ,ylab = "Economic Impact in dollars", xlab = "Event Type", las=2)
+```
+
+There are a couple things to note about the barplot.  It seems that there was some inconsistency in the data when noting the event type so there was duplication.  We will consider River flood, Flood, and flash flood to all come under the broad category of flood.  We will also consider hurricane/typhoon, hurricane and high wind to all come under the broad category of hurricane. From this we can conclude that flood and hurricane are the two severe weather events most affecting the economy.
+
+##Conclusion and Summary
+
+We initially set out to answer two questions:
+
+1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+2. Across the United States, which types of events have the greatest economic consequences?
+
+After our analysis we have concluded that the weather events most harmful with respect to population health are tornado and excessive heat. Also, the weather events most harmful with respect to population health are flood and typhoon.
+
+
+
+
+
+
